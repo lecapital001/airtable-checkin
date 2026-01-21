@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Audit Check-In</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; padding: 24px; max-width: 720px; margin: 0 auto; }
+    button { font-size: 18px; padding: 12px 16px; cursor: pointer; }
+    .muted { color: #555; }
+    pre { background: #f6f6f6; padding: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>Audit Check-In</h1>
+  <p class="muted">Tap the button, allow location access, and we’ll stamp your GPS onto the audit record.</p>
+
+  <p><strong>Record:</strong> <span id="rid">—</span></p>
+
+  <button id="btn">Capture location & check in</button>
+
+  <p id="status" class="muted"></p>
+  <pre id="debug" style="display:none;"></pre>
+
+  <script>
+    const WEBHOOK_URL = "PASTE_YOUR_AIRTABLE_WEBHOOK_URL_HERE";
+
+    const ridEl = document.getElementById("rid");
+    const statusEl = document.getElementById("status");
+    const debugEl = document.getElementById("debug");
+    const btn = document.getElementById("btn");
+
+    const params = new URLSearchParams(location.search);
+    const recordId = params.get("recordId");
+
+    ridEl.textContent = recordId || "(missing recordId)";
+
+    function setStatus(msg) {
+      statusEl.textContent = msg;
+    }
+
+    function showDebug(obj) {
+      debugEl.style.display = "block";
+      debugEl.textContent = JSON.stringify(obj, null, 2);
+    }
+
+    async function postCheckin(payload) {
+      const res = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      // Airtable webhooks often return 200/202 with minimal text
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Webhook error ${res.status}: ${text}`);
+      }
+    }
+
+    btn.addEventListener("click", async () => {
+      if (!recordId) {
+        setStatus("Error: recordId missing from the URL.");
+        return;
+      }
+      if (!("geolocation" in navigator)) {
+        setStatus("Geolocation not supported on this device/browser.");
+        return;
+      }
+
+      setStatus("Requesting location permission…");
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            const payload = {
+              recordId,
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+              accuracy: pos.coords.accuracy, // meters
+              capturedAt: new Date().toISOString()
+            };
+
+            setStatus("Location captured. Sending to Airtable…");
+            showDebug(payload);
+
+            await postCheckin(payload);
+
+            setStatus("✅ Checked in successfully. You can close this page.");
+          } catch (err) {
+            setStatus("Failed to send check-in: " + err.message);
+          }
+        },
+        (err) => {
+          // Common: user denied, timeout, unavailable
+          setStatus(`Location error: ${err.message}`);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    });
+  </script>
+</body>
+</html>
