@@ -3,95 +3,210 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Audit Check-In</title>
+  <title>Audit Visit Check-In</title>
+
   <style>
-    body { font-family: system-ui, Arial, sans-serif; padding: 24px; max-width: 720px; margin: 0 auto; }
-    button { font-size: 18px; padding: 12px 16px; cursor: pointer; }
-    .muted { color: #555; }
-    pre { background: #f6f6f6; padding: 12px; overflow: auto; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
+      padding: 40px 16px;
+      color: #1f2933;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      font-size: 22px;
+      margin: 0 0 12px 0;
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0 0 16px 0;
+      line-height: 1.5;
+    }
+
+    .meta {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .meta strong {
+      font-weight: 600;
+    }
+
+    button {
+      display: inline-block;
+      width: 100%;
+      padding: 14px 18px;
+      font-size: 16px;
+      font-weight: 600;
+      background-color: #1f3a5f;
+      color: #ffffff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #16304f;
+    }
+
+    button:disabled {
+      background-color: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+    }
+
+    .error {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #7f1d1d;
+    }
+
+    .success {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #065f46;
+    }
+
+    pre {
+      margin-top: 16px;
+      padding: 12px;
+      background: #f1f5f9;
+      border-radius: 4px;
+      font-size: 12px;
+      overflow-x: auto;
+    }
+
+    footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #6b7280;
+      text-align: center;
+    }
   </style>
 </head>
+
 <body>
-  <h1>Audit Check-In</h1>
-  <p class="muted">Tap the button, allow location access, and we’ll stamp your GPS onto the audit record.</p>
+  <div class="container">
+    <h1>Audit Visit Check-In</h1>
 
-  <p><strong>Record:</strong> <span id="rid">—</span></p>
+    <p>
+      This page records your arrival at the audit location by capturing your
+      current GPS position and timestamp.
+    </p>
 
-  <button id="btn">Capture location & check in</button>
+    <div class="meta">
+      <strong>Audit record:</strong>
+      <span id="rid">—</span>
+    </div>
 
-  <p id="status" class="muted"></p>
-  <pre id="debug" style="display:none;"></pre>
+    <button id="btn">Check in at this location</button>
+
+    <div id="status" class="status" style="display:none;"></div>
+
+    <pre id="debug" style="display:none;"></pre>
+
+    <footer>
+      Location data is captured only at the moment you press “Check in”.
+    </footer>
+  </div>
 
   <script>
-    // — YOUR MAKE WEBHOOK —
     const WEBHOOK_URL = "https://hook.eu1.make.com/5zkgn6c5yigsu6v5cuki7jsx5iojh3ow";
 
-    const ridEl = document.getElementById("rid");
+    const btn = document.getElementById("btn");
     const statusEl = document.getElementById("status");
     const debugEl = document.getElementById("debug");
-    const btn = document.getElementById("btn");
+    const ridEl = document.getElementById("rid");
 
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     const recordId = params.get("recordId");
-    ridEl.textContent = recordId || "(missing recordId)";
 
-    function setStatus(msg) {
-      statusEl.textContent = msg;
+    ridEl.textContent = recordId || "Not provided";
+
+    function showStatus(message, type = "") {
+      statusEl.textContent = message;
+      statusEl.className = "status " + type;
+      statusEl.style.display = "block";
     }
 
-    function showDebug(obj) {
-      debugEl.style.display = "block";
-      debugEl.textContent = JSON.stringify(obj, null, 2);
-    }
-
-    async function postCheckin(payload) {
+    async function postCheckIn(payload) {
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(`Webhook error ${res.status}: ${text}`);
+        throw new Error(text || "Unable to submit check-in.");
       }
     }
 
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       if (!recordId) {
-        setStatus("Error: recordId missing from URL");
-        return;
-      }
-      if (!("geolocation" in navigator)) {
-        setStatus("Geolocation not supported on this device/browser.");
+        showStatus("Record identifier is missing from the URL.", "error");
         return;
       }
 
-      setStatus("Requesting location…");
+      if (!navigator.geolocation) {
+        showStatus("Geolocation is not supported on this device.", "error");
+        return;
+      }
+
+      btn.disabled = true;
+      showStatus("Requesting current location…");
 
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           try {
             const payload = {
-              recordId,
+              recordId: recordId,
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
               accuracy: pos.coords.accuracy,
               capturedAt: new Date().toISOString()
             };
 
-            setStatus("Location captured, sending…");
-            showDebug(payload);
+            debugEl.textContent = JSON.stringify(payload, null, 2);
+            debugEl.style.display = "none"; // set to "block" if you want visible debug
 
-            await postCheckin(payload);
+            await postCheckIn(payload);
 
-            setStatus("✅ Checked in successfully!");
+            showStatus(
+              "Check-in successful. Your location and time have been recorded.",
+              "success"
+            );
           } catch (err) {
-            setStatus("Failed to send check-in: " + err.message);
+            showStatus("Check-in failed: " + err.message, "error");
+            btn.disabled = false;
           }
         },
         (err) => {
-          setStatus(`Location error: ${err.message}`);
+          showStatus("Unable to retrieve location: " + err.message, "error");
+          btn.disabled = false;
         },
         {
           enableHighAccuracy: true,
@@ -103,7 +218,6 @@
   </script>
 </body>
 </html>
-
 
 
 
