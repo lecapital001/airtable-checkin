@@ -23,8 +23,8 @@
   <pre id="debug" style="display:none;"></pre>
 
   <script>
+    // — YOUR MAKE WEBHOOK —
     const WEBHOOK_URL = "https://hook.eu1.make.com/5zkgn6c5yigsu6v5cuki7jsx5iojh3ow";
-    document.getElementById("status").textContent = "Posting to: " + WEBHOOK_URL;
 
     const ridEl = document.getElementById("rid");
     const statusEl = document.getElementById("status");
@@ -33,7 +33,6 @@
 
     const params = new URLSearchParams(location.search);
     const recordId = params.get("recordId");
-
     ridEl.textContent = recordId || "(missing recordId)";
 
     function setStatus(msg) {
@@ -52,7 +51,6 @@
         body: JSON.stringify(payload),
       });
 
-      // Airtable webhooks often return 200/202 with minimal text
       if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new Error(`Webhook error ${res.status}: ${text}`);
@@ -61,7 +59,7 @@
 
     btn.addEventListener("click", async () => {
       if (!recordId) {
-        setStatus("Error: recordId missing from the URL.");
+        setStatus("Error: recordId missing from URL");
         return;
       }
       if (!("geolocation" in navigator)) {
@@ -69,7 +67,7 @@
         return;
       }
 
-      setStatus("Requesting location permission…");
+      setStatus("Requesting location…");
 
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
@@ -78,22 +76,21 @@
               recordId,
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
-              accuracy: pos.coords.accuracy, // meters
+              accuracy: pos.coords.accuracy,
               capturedAt: new Date().toISOString()
             };
 
-            setStatus("Location captured. Sending to Airtable…");
+            setStatus("Location captured, sending…");
             showDebug(payload);
 
             await postCheckin(payload);
 
-            setStatus("✅ Checked in successfully. You can close this page.");
+            setStatus("✅ Checked in successfully!");
           } catch (err) {
             setStatus("Failed to send check-in: " + err.message);
           }
         },
         (err) => {
-          // Common: user denied, timeout, unavailable
           setStatus(`Location error: ${err.message}`);
         },
         {
@@ -106,6 +103,7 @@
   </script>
 </body>
 </html>
+
 
 
 
